@@ -2193,13 +2193,26 @@ async function sendServerChanQRNotification(qrSrc: string) {
 	}
 }
 
+/**
+ * 发送人脸识别二维码通知（如果已启用且有二维码）
+ */
+function notifyFaceRecognitionQR() {
+	const qrSrc = getFaceRecognitionQRSrc();
+	if (qrSrc) {
+		sendServerChanQRNotification(qrSrc).catch((err) => {
+			$console.error('Server酱通知发送失败:', err);
+		});
+	}
+}
+
 function hasFaceRecognition() {
 	// 人脸元素有时候 src 属性为空字符串，所以这里需要判断 src 是否为空字符串，如是则人脸识别会出现。
 	const faces = $$el<HTMLImageElement>('#fcqrimg', top?.document);
 	let active = false;
 	for (const face of faces) {
 		const src = face.getAttribute('src');
-		if (src) {
+		// 检查src是否为有效的非空字符串
+		if (src && src.trim() !== '') {
 			active = true;
 			break;
 		}
@@ -2240,12 +2253,7 @@ function waitForNewFaceRecognition() {
 					$console.warn(msg);
 
 					// 发送Server酱二维码通知
-					const qrSrc = getFaceRecognitionQRSrc();
-					if (qrSrc) {
-						sendServerChanQRNotification(qrSrc).catch((err) => {
-							$console.error('Server酱通知发送失败:', err);
-						});
-					}
+					notifyFaceRecognitionQR();
 				}
 			} else {
 				clearInterval(interval);
@@ -2275,12 +2283,7 @@ function waitForFaceRecognition() {
 					$console.warn(msg);
 
 					// 发送Server酱二维码通知
-					const qrSrc = getFaceRecognitionQRSrc();
-					if (qrSrc) {
-						sendServerChanQRNotification(qrSrc).catch((err) => {
-							$console.error('Server酱通知发送失败:', err);
-						});
-					}
+					notifyFaceRecognitionQR();
 				}
 			} else {
 				clearInterval(interval);

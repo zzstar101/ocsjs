@@ -2144,6 +2144,19 @@ function getFaceRecognitionQRSrc(): string | null {
 }
 
 /**
+ * Server酱 API 响应接口
+ */
+interface ServerChanResponse {
+	code?: number;
+	message?: string;
+	info?: string;
+	data?: {
+		errno?: number;
+		[key: string]: any;
+	};
+}
+
+/**
  * 通过Server酱发送人脸识别二维码通知
  * @param qrSrc 二维码图片地址
  */
@@ -2178,7 +2191,7 @@ async function sendServerChanQRNotification(qrSrc: string) {
 
 		// 检查Server酱API响应
 		if (response && typeof response === 'object') {
-			const apiResponse = response as any;
+			const apiResponse = response as ServerChanResponse;
 			if (apiResponse.code === 0 || apiResponse.data?.errno === 0) {
 				$console.log('Server酱二维码通知发送成功');
 			} else {
@@ -2199,9 +2212,8 @@ async function sendServerChanQRNotification(qrSrc: string) {
 function notifyFaceRecognitionQR() {
 	const qrSrc = getFaceRecognitionQRSrc();
 	if (qrSrc) {
-		sendServerChanQRNotification(qrSrc).catch((err) => {
-			$console.error('Server酱通知发送失败:', err);
-		});
+		// 不需要额外的catch，sendServerChanQRNotification已经处理了所有错误
+		sendServerChanQRNotification(qrSrc);
 	}
 }
 

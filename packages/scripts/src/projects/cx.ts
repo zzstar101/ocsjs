@@ -252,6 +252,23 @@ export const CXProject = Project.create({
 					},
 					defaultValue: true
 				},
+				serverChanEnable: {
+					label: 'Server酱人脸识别二维码通知',
+					attrs: {
+						type: 'checkbox',
+						title: '开启后，检测到人脸识别时会通过Server酱发送二维码图片到您的邮箱或其他通知渠道'
+					},
+					defaultValue: false
+				},
+				serverChanSendKey: {
+					label: 'Server酱SendKey',
+					attrs: {
+						type: 'input',
+						title: '填写您的Server酱SendKey，可在 https://sct.ftqq.com 获取',
+						placeholder: '请输入SendKey'
+					},
+					defaultValue: ''
+				},
 				enables: {
 					...dropdownStyle,
 					label: '高级设置',
@@ -2111,13 +2128,103 @@ async function readerAndFillHandle(searchInfos: SearchInformation[], list: HTMLE
 	return { finish: false };
 }
 
+/**
+ * 获取人脸识别二维码图片的src
+ */
+function getFaceRecognitionQRSrc(): string | null {
+	const faces = $$el<HTMLImageElement>('#fcqrimg', top?.document);
+	for (const face of faces) {
+		const src = face.getAttribute('src');
+		// 验证src是否为有效的非空URL
+		if (src && src.trim() !== '') {
+			return src;
+		}
+	}
+	return null;
+}
+
+/**
+ * Server酱 API 响应接口
+ */
+interface ServerChanResponse {
+	code?: number;
+	message?: string;
+	info?: string;
+	data?: {
+		errno?: number;
+		[key: string]: any;
+	};
+}
+
+/**
+ * 通过Server酱发送人脸识别二维码通知
+ * @param qrSrc 二维码图片地址
+ */
+async function sendServerChanQRNotification(qrSrc: string) {
+	const sendKey = CXProject.scripts.study.cfg.serverChanSendKey?.trim();
+	const enable = CXProject.scripts.study.cfg.serverChanEnable;
+
+	// 如果没有开启或者没有配置SendKey，直接返回
+	if (!enable || !sendKey) {
+		return;
+	}
+
+	try {
+		const title = '超星学习通人脸识别通知';
+		const desp = `检测到人脸识别，请扫描以下二维码进行验证：\n\n![二维码](${qrSrc})`;
+
+		// Server酱API地址
+		const url = `https://sctapi.ftqq.com/${sendKey}.send`;
+
+		const response = await request(url, {
+			type: 'GM_xmlhttpRequest',
+			method: 'post',
+			headers: {
+				'Content-Type': 'application/json'
+			},
+			data: JSON.stringify({
+				title: title,
+				desp: desp
+			}),
+			responseType: 'json'
+		});
+
+		// 检查Server酱API响应
+		if (response && typeof response === 'object') {
+			const apiResponse = response as ServerChanResponse;
+			if (apiResponse.code === 0 || apiResponse.data?.errno === 0) {
+				$console.log('Server酱二维码通知发送成功');
+			} else {
+				$console.error('Server酱API返回错误:', apiResponse.message || apiResponse.info || '未知错误');
+			}
+		} else {
+			$console.log('Server酱二维码通知已发送');
+		}
+	} catch (error) {
+		$console.error('Server酱二维码通知发送失败:', error);
+		$console.error('请检查SendKey是否正确，或访问 https://sct.ftqq.com 查看详情');
+	}
+}
+
+/**
+ * 发送人脸识别二维码通知（如果已启用且有二维码）
+ */
+function notifyFaceRecognitionQR() {
+	const qrSrc = getFaceRecognitionQRSrc();
+	if (qrSrc) {
+		// 不需要额外的catch，sendServerChanQRNotification已经处理了所有错误
+		sendServerChanQRNotification(qrSrc);
+	}
+}
+
 function hasFaceRecognition() {
 	// 人脸元素有时候 src 属性为空字符串，所以这里需要判断 src 是否为空字符串，如是则人脸识别会出现。
 	const faces = $$el<HTMLImageElement>('#fcqrimg', top?.document);
 	let active = false;
 	for (const face of faces) {
 		const src = face.getAttribute('src');
-		if (src) {
+		// 检查src是否为有效的非空字符串
+		if (src && src.trim() !== '') {
 			active = true;
 			break;
 		}
@@ -2156,6 +2263,9 @@ function waitForNewFaceRecognition() {
 					}
 					$message.warn({ content: msg, duration: 0 });
 					$console.warn(msg);
+
+					// 发送Server酱二维码通知
+					notifyFaceRecognitionQR();
 				}
 			} else {
 				clearInterval(interval);
@@ -2183,6 +2293,9 @@ function waitForFaceRecognition() {
 					}
 					$message.warn({ content: msg, duration: 0 });
 					$console.warn(msg);
+
+					// 发送Server酱二维码通知
+					notifyFaceRecognitionQR();
 				}
 			} else {
 				clearInterval(interval);

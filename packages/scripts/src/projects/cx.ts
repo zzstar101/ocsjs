@@ -252,6 +252,23 @@ export const CXProject = Project.create({
 					},
 					defaultValue: true
 				},
+				serverChanEnable: {
+					label: 'Server酱人脸识别二维码通知',
+					attrs: {
+						type: 'checkbox',
+						title: '开启后，检测到人脸识别时会通过Server酱发送二维码图片到您的邮箱或其他通知渠道'
+					},
+					defaultValue: false
+				},
+				serverChanSendKey: {
+					label: 'Server酱SendKey',
+					attrs: {
+						type: 'input',
+						title: '填写您的Server酱SendKey，可在 https://sct.ftqq.com 获取',
+						placeholder: '请输入SendKey'
+					},
+					defaultValue: ''
+				},
 				enables: {
 					...dropdownStyle,
 					label: '高级设置',
@@ -2111,6 +2128,58 @@ async function readerAndFillHandle(searchInfos: SearchInformation[], list: HTMLE
 	return { finish: false };
 }
 
+/**
+ * 获取人脸识别二维码图片的src
+ */
+function getFaceRecognitionQRSrc(): string | null {
+	const faces = $$el<HTMLImageElement>('#fcqrimg', top?.document);
+	for (const face of faces) {
+		const src = face.getAttribute('src');
+		if (src) {
+			return src;
+		}
+	}
+	return null;
+}
+
+/**
+ * 通过Server酱发送人脸识别二维码通知
+ * @param qrSrc 二维码图片地址
+ */
+async function sendServerChanQRNotification(qrSrc: string) {
+	const sendKey = CXProject.scripts.study.cfg.serverChanSendKey;
+	const enable = CXProject.scripts.study.cfg.serverChanEnable;
+
+	// 如果没有开启或者没有配置SendKey，直接返回
+	if (!enable || !sendKey || sendKey.trim() === '') {
+		return;
+	}
+
+	try {
+		const title = '超星学习通人脸识别通知';
+		const desp = `检测到人脸识别，请扫描以下二维码进行验证：\n\n![二维码](${qrSrc})`;
+
+		// Server酱API地址
+		const url = `https://sctapi.ftqq.com/${sendKey.trim()}.send`;
+
+		await request(url, {
+			type: 'GM_xmlhttpRequest',
+			method: 'post',
+			headers: {
+				'Content-Type': 'application/json'
+			},
+			data: JSON.stringify({
+				title: title,
+				desp: desp
+			})
+		});
+
+		$console.log('Server酱二维码通知发送成功');
+	} catch (error) {
+		$console.error('Server酱二维码通知发送失败:', error);
+	}
+}
+
 function hasFaceRecognition() {
 	// 人脸元素有时候 src 属性为空字符串，所以这里需要判断 src 是否为空字符串，如是则人脸识别会出现。
 	const faces = $$el<HTMLImageElement>('#fcqrimg', top?.document);
@@ -2156,6 +2225,14 @@ function waitForNewFaceRecognition() {
 					}
 					$message.warn({ content: msg, duration: 0 });
 					$console.warn(msg);
+
+					// 发送Server酱二维码通知
+					const qrSrc = getFaceRecognitionQRSrc();
+					if (qrSrc) {
+						sendServerChanQRNotification(qrSrc).catch((err) => {
+							$console.error('Server酱通知发送失败:', err);
+						});
+					}
 				}
 			} else {
 				clearInterval(interval);
@@ -2183,6 +2260,14 @@ function waitForFaceRecognition() {
 					}
 					$message.warn({ content: msg, duration: 0 });
 					$console.warn(msg);
+
+					// 发送Server酱二维码通知
+					const qrSrc = getFaceRecognitionQRSrc();
+					if (qrSrc) {
+						sendServerChanQRNotification(qrSrc).catch((err) => {
+							$console.error('Server酱通知发送失败:', err);
+						});
+					}
 				}
 			} else {
 				clearInterval(interval);
